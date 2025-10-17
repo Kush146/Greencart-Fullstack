@@ -1,0 +1,21 @@
+# Node modules and other common directories
+node_modules/
+.next/
+dist/
+build/
+
+# .env files for sensitive data
+.env
+.env.local
+.env.development
+.env.production
+
+# Prisma
+.prisma/
+
+# Logs
+logs/
+
+# IDE configurations (optional)
+.vscode/
+.idea/
