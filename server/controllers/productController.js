@@ -6,7 +6,36 @@ export const addProduct = async (req, res)=>{
     try {
         let productData = JSON.parse(req.body.productData)
 
-        const images = req.files
+        // ✅ NEW: basic sanitization
+        const name = (productData?.name || '').trim()
+        const category = (productData?.category || '').trim()
+        const price = Number(productData?.price)
+        const offerPrice = Number(productData?.offerPrice)
+
+        if (!name || !category) {
+            return res.json({ success: false, message: "Name and category are required" })
+        }
+        if (!price || !offerPrice || price <= 0 || offerPrice <= 0) {
+            return res.json({ success: false, message: "Invalid price/offerPrice" })
+        }
+        if (offerPrice > price) {
+            return res.json({ success: false, message: "Offer Price cannot be greater than Price" })
+        }
+
+        // ✅ NEW: duplicate check BEFORE uploading images
+        const existing = await Product.findOne(
+          { name, category, /* isDeleted: false */ },
+        ).collation({ locale: 'en', strength: 2 }); // case-insensitive
+
+        if (existing) {
+            return res.json({ success: false, message: "A product with the same name already exists in this category" })
+        }
+
+        const images = req.files || []
+
+        if (!images.length) {
+            return res.json({ success: false, message: "Please upload at least one image" })
+        }
 
         let imagesUrl = await Promise.all(
             images.map(async (item)=>{
@@ -15,7 +44,16 @@ export const addProduct = async (req, res)=>{
             })
         )
 
-        await Product.create({...productData, image: imagesUrl})
+        // ✅ NEW: ensure numeric storage + default seller for now
+        await Product.create({
+            ...productData,
+            name,
+            category,
+            price,
+            offerPrice,
+            image: imagesUrl,
+            seller: productData?.seller || 'admin'
+        })
 
         res.json({success: true, message: "Product Added"})
 
@@ -28,7 +66,8 @@ export const addProduct = async (req, res)=>{
 // Get Product : /api/product/list
 export const productList = async (req, res)=>{
     try {
-        const products = await Product.find({})
+        // ✅ UPDATED: exclude soft-deleted if that field exists (safe even if it doesn't)
+        const products = await Product.find({ $or: [ { isDeleted: { $exists: false } }, { isDeleted: false } ] })
         res.json({success: true, products})
     } catch (error) {
         console.log(error.message);

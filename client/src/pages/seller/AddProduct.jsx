@@ -12,16 +12,62 @@ const AddProduct = () => {
     const [price, setPrice] = useState('');
     const [offerPrice, setOfferPrice] = useState('');
 
-    const {axios} = useAppContext()
+    // ✅ NEW: loading state
+    const [submitting, setSubmitting] = useState(false);
+
+    // ✅ CHANGED: pull products too (for duplicate check) — existing axios kept as-is
+    const { axios, products } = useAppContext()
+
+    // ✅ NEW: normalize helper for duplicate check
+    const normalize = (s = '') => s.trim().toLowerCase();
 
     const onSubmitHandler = async (event) => {
         try {
             event.preventDefault();
 
+            // ✅ NEW: sanitize local values
+            const _name = name.trim();
+            const _category = category.trim();
+            const _desc = description.trim();
+
+            // ✅ NEW: validations
+            if (!_name) {
+                toast.error('Please enter a product name');
+                return;
+            }
+            if (!_category) {
+                toast.error('Please select a category');
+                return;
+            }
+            if (!files.filter(Boolean).length) {
+                toast.error('Please upload at least one product image');
+                return;
+            }
+            const p = Number(price);
+            const op = Number(offerPrice);
+            if (!p || p <= 0 || !op || op <= 0) {
+                toast.error('Price and Offer Price must be greater than 0');
+                return;
+            }
+            if (op > p) {
+                toast.error('Offer Price cannot be greater than Product Price');
+                return;
+            }
+
+            // ✅ NEW: duplicate protection (name + category, case-insensitive)
+            const isDuplicate = Array.isArray(products) && products.some(prod =>
+                normalize(prod?.name) === normalize(_name) &&
+                normalize(prod?.category) === normalize(_category)
+            );
+            if (isDuplicate) {
+                toast.error('A product with the same name already exists in this category');
+                return;
+            }
+
             const productData = {
-                name,
-                description: description.split('\n'),
-                category,
+                name: _name,
+                description: _desc ? _desc.split('\n') : [],
+                category: _category,
                 price,
                 offerPrice
             }
@@ -29,9 +75,13 @@ const AddProduct = () => {
             const formData = new FormData();
             formData.append('productData', JSON.stringify(productData));
             for (let i = 0; i < files.length; i++) {
-                formData.append('images', files[i])
+                if (files[i]) {
+                    formData.append('images', files[i])
+                }
             }
 
+            // ✅ NEW: loading state on network call
+            setSubmitting(true);
             const {data} = await axios.post('/api/product/add', formData)
 
             if (data.success){
@@ -48,8 +98,10 @@ const AddProduct = () => {
 
         } catch (error) {
             toast.error(error.message)
+        } finally {
+            // ✅ NEW: always release loading state
+            setSubmitting(false);
         }
-        
       }
 
   return (
@@ -66,7 +118,7 @@ const AddProduct = () => {
                                     updatedFiles[index] = e.target.files[0]
                                     setFiles(updatedFiles)
                                 }}
-                                type="file" id={`image${index}`} hidden />
+                                type="file" id={`image${index}`} hidden accept="image/*" />
 
                                 <img className="max-w-24 cursor-pointer" src={files[index] ? URL.createObjectURL(files[index]) : assets.upload_area} alt="uploadArea" width={100} height={100} />
                             </label>
@@ -105,7 +157,9 @@ const AddProduct = () => {
                         id="offer-price" type="number" placeholder="0" className="outline-none md:py-2.5 py-2 px-3 rounded border border-gray-500/40" required />
                     </div>
                 </div>
-                <button className="px-8 py-2.5 bg-primary text-white font-medium rounded cursor-pointer">ADD</button>
+                <button className="px-8 py-2.5 bg-primary text-white font-medium rounded cursor-pointer disabled:opacity-60" disabled={submitting}>
+                  {submitting ? 'ADDING…' : 'ADD'}
+                </button>
             </form>
         </div>
   )

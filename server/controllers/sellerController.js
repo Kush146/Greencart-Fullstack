@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
+import Product from '../models/Product.js';
 
 // Login Seller : /api/seller/login
-
 export const sellerLogin = async (req, res) =>{
     try {
         const { email, password } = req.body;
@@ -37,7 +37,6 @@ export const isSellerAuth = async (req, res)=>{
 }
 
 // Logout Seller : /api/seller/logout
-
 export const sellerLogout = async (req, res)=>{
     try {
         res.clearCookie('sellerToken', {
@@ -51,3 +50,52 @@ export const sellerLogout = async (req, res)=>{
         res.json({ success: false, message: error.message });
     }
 }
+
+/* -------------------------------------------------------
+   ADDITIONS: Delete endpoints for products (hard delete)
+   ------------------------------------------------------- */
+
+// Delete a single product by ID
+// Route: DELETE /api/seller/products/:id
+export const deleteProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // If your Product has a seller field and you attach req.user in auth,
+    // you can restrict deletes to the owner by adding: , seller: req.user._id
+    const deleted = await Product.findOneAndDelete({ _id: id /*, seller: req.user._id */ });
+
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    return res.status(200).json({ success: true, message: 'Deleted', id });
+  } catch (error) {
+    console.log(error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Bulk delete products by array of IDs
+// Route: POST /api/seller/products/bulk-delete
+export const bulkDeleteProducts = async (req, res) => {
+  try {
+    const { ids } = req.body; // expects: { ids: ["id1","id2",...] }
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'ids[] required' });
+    }
+
+    const result = await Product.deleteMany({ _id: { $in: ids } /*, seller: req.user._id */ });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Deleted',
+      deleted: result.deletedCount,
+      ids
+    });
+  } catch (error) {
+    console.log(error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
